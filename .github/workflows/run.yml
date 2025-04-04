@@ -22,3 +22,4 @@ jobs:
 
     - name: Run auto post script
       run: python auto_post.py
+#테스트
