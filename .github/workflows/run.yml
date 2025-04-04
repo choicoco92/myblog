@@ -22,4 +22,11 @@ jobs:
 
     - name: Run auto post script
       run: python blog.py
-#테스트
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        WP_URL: ${{ secrets.WP_URL }}
+        WP_USERNAME: ${{ secrets.WP_USERNAME }}
+        WP_PASSWORD: ${{ secrets.WP_PASSWORD }}
+        CP_ACCESS_KEY: ${{ secrets.CP_ACCESS_KEY }}
+        CP_SECRET_KEY: ${{ secrets.CP_SECRET_KEY }}
+
