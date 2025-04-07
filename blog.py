@@ -12,22 +12,21 @@ from config import *
 openai.api_key = OPENAI_API_KEY
 
 CATEGORIES = {
-    1001: "여성패션", 1002: "남성패션", 1010: "뷰티", 1011: "출산/유아동",
-    1013: "주방용품", 1014: "생활용품", 1015: "홈인테리어", 1016: "가전디지털",
-    1017: "스포츠/레저", 1018: "자동차용품", 1019: "도서/음반/DVD", 1020: "완구/취미",
-    1021: "문구/오피스", 1024: "헬스/건강식품", 1025: "국내여행", 1026: "해외여행",
+    1016: "가전디지털",
+    1015: "홈인테리어",
+    1017: "스포츠/레저",
+    1018: "자동차용품",
+    1025: "국내여행", 1026: "해외여행",
     1029: "반려동물용품", 1030: "유아동패션"
 }
 EXCLUDE_CATEGORY = [1012]
 VALID_CATEGORIES = [k for k in CATEGORIES if k not in EXCLUDE_CATEGORY]
-
 
 def print_progress(percent, message):
     bar_len = 30
     filled_len = int(bar_len * percent // 100)
     bar = '█' * filled_len + '░' * (bar_len - filled_len)
     print(f"[{bar}] {percent}% - {message}")
-
 
 def generateHmac(method, full_url_path, secretKey, accessKey):
     if '?' in full_url_path:
@@ -39,9 +38,7 @@ def generateHmac(method, full_url_path, secretKey, accessKey):
     message = signed_date + method + path + query
 
     signature = hmac.new(secretKey.encode("utf-8"), message.encode("utf-8"), hashlib.sha256).hexdigest()
-
     return f"CEA algorithm=HmacSHA256, access-key={accessKey}, signed-date={signed_date}, signature={signature}"
-
 
 def get_random_best_product():
     for _ in range(5):
@@ -70,64 +67,23 @@ def get_random_best_product():
 
     raise Exception("🚨 쿠팡 상품을 가져올 수 없습니다.")
 
-
 def generate_review(product_name):
     prompt = f"""
 '{product_name}' 제품에 대해 SEO 최적화된 블로그 리뷰 글을 3000자 이상, 800단어 이상 분량으로 작성해줘.
-구성: 1. 구매 전 고려할 점, 2. 제품의 주요 특징, 3. 장점과 단점, 4. 실사용 팁, 5. 총평과 이런 분께 추천
+구성: 1. 구매 전 고려할 점, 2. 제품의 주요 특징, 3. 장점과 단점, 4. 실사용 팁, 5. 총평과 이런 분께 추천.
 """
     response = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "system", "content": "당신은 리뷰 전문 블로거입니다."}, {"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": "당신은 리뷰 전문 블로거입니다."},
+            {"role": "user", "content": prompt}
+        ],
         temperature=0.7
     )
     return response['choices'][0]['message']['content']
 
-
 def clean_text(text):
     return re.sub(r'\*\*|__', '', text)
-
-
-def get_meta_description(text):
-    return text.strip().split('\n')[0][:140]
-
-
-def spread_keyword(html, keyword):
-    lines = html.split('</p>')
-    for i in range(1, len(lines), max(1, len(lines)//3)):
-        lines[i] += f" <strong>{keyword}</strong>"
-    return '</p>'.join(lines)
-
-
-def generate_hashtags(product_name):
-    words = re.findall(r'[가-힣a-zA-Z0-9]+', product_name)
-    base_tags = ['리뷰', '쿠팡추천', '인기상품']
-    tags = [f"#{word}" for word in words if len(word) > 1]
-    return ' '.join(tags + [f"#{tag}" for tag in base_tags])
-
-
-def hashtag_block(product_name):
-    tags = generate_hashtags(product_name)
-    return f"""
-<div style=\"margin-top:20px; font-size:14px; color:#555;\">
-{tags}
-</div>
-"""
-
-
-def internal_link_block():
-    return """
-<div style="border:1px dashed #ccc; padding:10px; margin-top:20px;">
-📌 오늘의 특가상품!: <a href="https://link.coupang.com/a/cmOStk" target="_blank">보러가기</a>
-</div>
-"""
-
-
-def insert_seo_meta(html, keyword, meta_desc):
-    seo_block = f"""<meta name=\"description\" content=\"{meta_desc}\">
-<meta name=\"keywords\" content=\"{keyword}\">"""
-    return seo_block + "\n\n" + html
-
 
 def format_html(text):
     html = []
@@ -155,8 +111,41 @@ def format_html(text):
             html.append(f"<p>{line}</p>")
     return '\n'.join(html)
 
+def apply_seo_fixes(review, html_content, product_name):
+    keyword_words = product_name.split()
+    keyword = ' '.join(keyword_words[:6]) if len(keyword_words) > 6 else product_name
 
-def build_html(product, review_text):
+    def get_meta_description(text, keyword):
+        first_line = text.strip().split('\n')[0]
+        if keyword not in first_line:
+            first_line = f"{keyword}에 대한 솔직 리뷰를 지금 확인해보세요.  {first_line}"
+        if len(first_line) < 120:
+            first_line += " 이 제품은 어떤 점이 좋은지, 아쉬운 점은 무엇인지 직접 써보고 분석해봤어요."
+        return first_line[:155]
+
+    def insert_intro_keyword(content, keyword):
+        keyword = keyword.rstrip(',')  # ← 여기 추가
+        intro = f"<p><strong>{keyword}</strong>에 대해 궁금하신가요? 리뷰로 자세히 소개해드릴게요!</p>\n"
+        return intro + content
+    def internal_link_block():
+        return """
+<div style=\"border:1px dashed #ccc; padding:10px; margin:20px 0;\">
+👉 <strong>쿠팡 베스트 상품모아보기:</strong> <a href=\"/wp-content/pages/coupang-products.html\" target=\"_blank\">인기 상품 모아보기</a>
+</div>
+"""
+    meta_desc = get_meta_description(review, keyword)
+    html_content = insert_intro_keyword(html_content, keyword)
+    html_content += internal_link_block()
+
+    return html_content, meta_desc, keyword
+
+def insert_seo_meta(html, keyword, meta_desc):
+    keyword = keyword.rstrip(',')  # ← 여기 추가
+    seo_block = f"""<meta name="description" content="{meta_desc}">
+<meta name="keywords" content="{keyword}">"""
+    return seo_block + "\n\n" + html
+
+def build_html(product, content):
     body = f"""
 <h2>{product['name']} 리뷰</h2>
 <p><strong>요약:</strong> 이 제품은 현재 쿠팡에서 인기 있는 상품 중 하나로, {product['price']}원에 판매되고 있습니다.</p>
@@ -170,18 +159,57 @@ def build_html(product, review_text):
 
 <h3>📦 상세 리뷰</h3>
 """
-    content = format_html(review_text)
-    content = spread_keyword(content, product['name'])
-    final = body + content + internal_link_block() + hashtag_block(product['name'])
-    meta_desc = get_meta_description(review_text)
-    return insert_seo_meta(final, product['name'], meta_desc)
+    return body + content + hashtag_block(product['name'])
 
+def generate_hashtags(product_name):
+    words = re.findall(r'[가-힣a-zA-Z0-9]+', product_name)
+    base_tags = ['리뷰', '쿠팡추천', '인기상품']
+    tags = [f"#{word}" for word in words if len(word) > 1]
+    return ' '.join(tags + [f"#{tag}" for tag in base_tags])
 
-def post_to_wp(product, html):
+def hashtag_block(product_name):
+    tags = generate_hashtags(product_name)
+    return f"""
+<div style=\"margin-top:20px; font-size:14px; color:#555;\">
+{tags}
+</div>
+"""
+
+def generate_tags(product_name):
+    words = re.findall(r'[가-힣a-zA-Z0-9]+', product_name)
+    tags = [word.strip() for word in words if len(word) > 1]
+    return tags[:5]
+
+def get_or_create_tags(tag_names):
+    tag_ids = []
+    for tag in tag_names:
+        res = requests.get(
+            f"{WP_URL.replace('/posts', '/tags')}?search={tag}",
+            auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+        )
+        data = res.json()
+        if data:
+            tag_ids.append(data[0]['id'])
+        else:
+            new_tag = {"name": tag}
+            res = requests.post(
+                WP_URL.replace('/posts', '/tags'),
+                headers={"Content-Type": "application/json"},
+                data=json.dumps(new_tag),
+                auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+            )
+            tag_ids.append(res.json()['id'])
+    return tag_ids
+
+def post_to_wp(product, html, keyword, meta_desc):
+    tag_names = generate_tags(product['name'])
+    tag_ids = get_or_create_tags(tag_names)
+
     post = {
         "title": f"{product['name']} 리뷰",
         "content": html,
-        "status": "publish"
+        "status": "publish",
+        "tags": tag_ids
     }
 
     res = requests.post(
@@ -191,9 +219,30 @@ def post_to_wp(product, html):
         auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
     )
 
-    print(f"✅ 워드프레스 업로드 완료: {res.status_code}")
-    print(res.json())
+    if res.status_code not in [200, 201]:
+        raise Exception(f"🚨 글 등록 실패: {res.status_code}")
 
+    post_id = res.json().get("id")
+    print(f"✅ 글 등록 성공 - ID: {post_id}")
+
+    meta = {
+        "meta": {
+            "_yoast_wpseo_focuskw": keyword.rstrip(','),        # ← 쉼표 제거
+            "_yoast_wpseo_metadesc": meta_desc
+        }
+    }
+
+    seo_res = requests.post(
+        f"{WP_URL}/{post_id}",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(meta),
+        auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+    )
+
+    if seo_res.status_code not in [200, 201]:
+        print("⚠️ Yoast SEO 메타 업데이트 실패:", seo_res.status_code)
+    else:
+        print("✅ Yoast SEO 메타 적용 완료")
 
 if __name__ == "__main__":
     try:
@@ -205,10 +254,14 @@ if __name__ == "__main__":
         print_progress(50, "리뷰 생성 중...")
 
         review = clean_text(review)
-        html = build_html(product, review)
+        content = format_html(review)
+        content, meta_desc, fixed_keyword = apply_seo_fixes(review, content, product['name'])
+
+        final_html = build_html(product, content)
+        final_html = insert_seo_meta(final_html, fixed_keyword, meta_desc)
         print_progress(75, "HTML 변환 중...")
 
-        post_to_wp(product, html)
+        post_to_wp(product, final_html, fixed_keyword, meta_desc)
         print_progress(100, "업로드 완료!")
 
     except Exception as e:
