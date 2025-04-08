@@ -30,7 +30,7 @@ jobs:
         CP_ACCESS_KEY: ${{ secrets.CP_ACCESS_KEY }}
         CP_SECRET_KEY: ${{ secrets.CP_SECRET_KEY }}
    
-   - name: Run jb.py (트렌드 자동 뉴스 포스팅)
+    - name: Run auto post script jb (트렌드 자동 뉴스 포스팅)
       run: python jb.py
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
