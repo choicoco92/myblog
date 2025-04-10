@@ -8,6 +8,7 @@ import re
 from time import gmtime, strftime
 from requests.auth import HTTPBasicAuth
 from config import *
+import time
 
 openai.api_key = OPENAI_API_KEY
 
@@ -147,6 +148,7 @@ def apply_seo_fixes(review, html_content, product_name):
     meta_desc = get_meta_description(review, keyword)
     html_content = insert_intro_keyword(html_content, keyword)
     html_content += internal_link_block()
+    html_content = limit_keyword_usage(html_content, keyword, limit=3)
 
     return html_content, meta_desc, keyword
 
@@ -248,14 +250,24 @@ def post_to_wp(product, html, keyword, meta_desc):
     tag_ids = get_or_create_tags(tag_names)
     category_id = get_or_create_category(CATEGORY_NAME)
 
+    prefix = get_category_prefix(CATEGORY_NAME)
+    slug_index = get_next_slug_index(prefix)
+    slug = f"{prefix}-{slug_index}"
+
     post = {
         "title": f"{product['name']} 리뷰",
+        "slug": slug,
         "content": html,
         "status": "publish",
         "tags": tag_ids,
-        "categories": [category_id]
+        "categories": [category_id],
+        "meta": {
+            "_yoast_wpseo_focuskw": keyword.rstrip(','),
+            "_yoast_wpseo_metadesc": meta_desc
+        }
     }
 
+    # 1차 등록
     res = requests.post(
         WP_URL,
         headers={"Content-Type": "application/json"},
@@ -264,30 +276,108 @@ def post_to_wp(product, html, keyword, meta_desc):
     )
 
     if res.status_code not in [200, 201]:
-        raise Exception(f"🚨 글 등록 실패: {res.status_code}")
+        raise Exception(f"🚨 글 등록 실패: {res.status_code} - {res.text}")
 
     post_id = res.json().get("id")
     print(f"✅ 글 등록 성공 - ID: {post_id}")
 
-    meta = {
-        "meta": {
-            "_yoast_wpseo_focuskw": keyword.rstrip(','),
-            "_yoast_wpseo_metadesc": meta_desc
-        }
+    # ✅ 2차 저장 (Yoast 점수 계산 트리거용)
+    patched_html = html + "\n<!-- YOAST REFRESH -->"
+    patch_post = {
+        "content": patched_html
     }
 
-    seo_res = requests.post(
+    time.sleep(5)
+    patch_res = requests.put(
         f"{WP_URL}/{post_id}",
         headers={"Content-Type": "application/json"},
-        data=json.dumps(meta),
+        data=json.dumps(patch_post),
         auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
     )
 
-    if seo_res.status_code not in [200, 201]:
-        print("⚠️ Yoast SEO 메타 업데이트 실패:", seo_res.status_code)
+    if patch_res.status_code in [200, 201]:
+        print("✅ Yoast 점수 반영용 재저장 완료")
     else:
-        print("✅ Yoast SEO 메타 적용 완료")
+        print("⚠️ 재저장 실패:", patch_res.status_code, patch_res.text)
 
+    # ✅ Yoast 점수 재계산 강제 호출
+    refresh_url = f"https://mgddang.com/wp-json/custom/v1/yoast-refresh/{post_id}"  # 🔁 도메인 수정 필요
+    refresh_res = requests.post(refresh_url)
+
+    if refresh_res.status_code == 200:
+        print("✅ Yoast 점수 강제 트리거 완료")
+    else:
+        print("⚠️ Yoast 트리거 실패:", refresh_res.status_code, refresh_res.text)
+
+
+
+def get_category_prefix(category_name):
+    if "쿠팡리뷰" in category_name:
+        return "cp"
+    elif "실시간정보" in category_name:
+        return "jb"
+    else:
+        return "post"
+
+def get_next_slug_index(prefix):
+    page = 1
+    all_slugs = []
+
+    while True:
+        res = requests.get(
+            f"{WP_URL}?per_page=100&page={page}",
+            auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+        )
+        if res.status_code != 200:
+            break
+
+        data = res.json()
+        if not data:
+            break
+
+        # prefix로 시작하는 slug만 추출
+        matching = [
+            post.get("slug", "") for post in data
+            if post.get("slug", "").startswith(prefix + "-")
+        ]
+        all_slugs.extend(matching)
+        page += 1
+
+    # 숫자 인덱스 추출
+    max_index = 0
+    for slug in all_slugs:
+        match = re.match(rf"{prefix}-(\d+)$", slug)  # 정확히 cp-숫자
+        if match:
+            idx = int(match.group(1))
+            max_index = max(max_index, idx)
+
+    return max_index + 1
+
+
+def limit_keyword_usage(text, keyword, limit=3):
+    """
+    본문에서 키워드가 너무 자주 나오는 걸 방지 (최대 limit회만 유지)
+    """
+    keyword_pattern = re.escape(keyword)
+    matches = list(re.finditer(keyword_pattern, text, flags=re.IGNORECASE))
+
+    if len(matches) <= limit:
+        return text  # 제한 안 넘으면 그대로 반환
+
+    # 초과된 키워드 위치 제거
+    new_text = text
+    count = 0
+    offset = 0
+    for match in matches:
+        if count < limit:
+            count += 1
+            continue
+        start, end = match.start() + offset, match.end() + offset
+        # 키워드 제거 (또는 다른 유사어로 바꾸려면 여기 수정)
+        new_text = new_text[:start] + new_text[end:]
+        offset -= (end - start)
+
+    return new_text
 
 if __name__ == "__main__":
     try:
