@@ -2,7 +2,7 @@ name: WordPress Auto Post
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # 매 6시간마다 실행
+    - cron: '0 */4 * * *'  # 매 6시간마다 실행
   workflow_dispatch:  # 수동 실행도 가능
 
 jobs:
