@@ -134,10 +134,7 @@ def apply_seo_fixes(review, html, product_name):
 
         html = f"<p><strong>{keyword}</strong>에 대해 궁금하신가요? 아래에서 자세히 알려드릴게요!</p>\n" + html
         html += """
-    <p style="font-size:13px; color:#999;">
-    ※ 이 콘텐츠는 쿠팡 상품과 사용자 리뷰 정보를 바탕으로 자동 생성되었습니다.<br>
-    쿠팡파트너로서  일정의 수수료를 받을 수 있습니다.<br>
-    </p>
+ 
     """
     return html, meta, keyword
 
@@ -214,6 +211,8 @@ def build_html(product, content):
     💰 <strong>가격:</strong> {product['price']}원 &nbsp;|&nbsp;
     ⭐ <strong>평점:</strong> ⭐⭐⭐⭐점 &nbsp;|&nbsp;
 </p>
+<h4>※ 이 콘텐츠는 쿠팡 상품과 사용자 리뷰 정보를 바탕으로 자동 생성되었습니다.<br>
+  쿠팡파트너로서  일정의 수수료를 받을 수 있습니다.<br> </h4>
 <div style="border:1px solid #ddd; padding:15px; background:#f9f9f9; border-radius:10px;">
     <img src="{product['image']}" style="max-width:100%; border-radius:10px;">
     <br><a href="{product['url']}" target="_blank" style="display:inline-block; margin-top:10px; background:#ff4800; color:white; padding:10px 20px; border-radius:5px;">🛒 최저가 보러가기</a>
