@@ -244,7 +244,7 @@ def upload_image_to_wp(img_url):
 def post_to_wp(product, html, keyword, meta_desc, category_slug):
     tag_ids = get_or_create_tags(generate_tags(product['name']))
     cat_id = get_or_create_category(category_slug)
-    slug = f"cp-{get_next_slug_index('cp')}"
+    slug = product['name'].strip().replace(" ", "-")
 
     # 이미지 업로드
     # ✅ 쿠팡 이미지 워드프레스에 업로드 후 ID 확보
