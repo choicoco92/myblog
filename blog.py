@@ -9,21 +9,24 @@ openai.api_key = OPENAI_API_KEY
 
 # ✅ 최신 쿠팡 카테고리 ID → 워드프레스 카테고리 슬러그 매핑
 COUPANG_CATEGORY_SLUG_MAP = {
-    1001: "hot-now",           # 여성패션
-    1002: "hot-now",           # 남성패션
-    1010: "hot-now",           # 뷰티
-    1011: "kids-life",         # 출산/유아동
-    1013: "home-living",       # 주방용품
-    1014: "home-living",       # 생활용품
-    1015: "home-living",       # 홈인테리어
-    1016: "tech-gadgets",      # 가전디지털
-    1017: "travel-leisure",    # 스포츠/레저
-    1018: "tech-gadgets",      # 자동차용품
-    1024: "daily-pick",        # 헬스/건강식품
-    1025: "travel-leisure",    # 국내여행
-    1026: "travel-leisure",    # 해외여행
-    1029: "pet-picks",         # 반려동물용품
-    1030: "kids-life"          # 유아동패션
+    1001: "hot-now",         # 여성패션
+    1002: "hot-now",         # 남성패션
+    1010: "hot-now",         # 뷰티
+    1011: "kids-life",       # 출산/유아동
+    1013: "home-living",     # 주방용품
+    1014: "daily-pick",      # 생활용품
+    1015: "home-living",     # 홈인테리어
+    1016: "tech-gadgets",    # 가전디지털
+    1017: "travel-leisure",  # 스포츠/레저
+    1018: "daily-pick",      # 자동차용품
+    1019: "daily-pick",      # 도서/음반/DVD
+    1020: "daily-pick",      # 완구/취미
+    1021: "daily-pick",      # 문구/오피스
+    1024: "daily-pick",      # 헬스/건강식품
+    1025: "travel-leisure",  # 국내여행
+    1026: "travel-leisure",  # 해외여행
+    1029: "pet-picks",       # 반려동물용품
+    1030: "kids-life",       # 유아동패션
 }
 
 EXCLUDE_CATEGORY = [1012]  # 식품 제외
