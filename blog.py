@@ -1,4 +1,4 @@
-# auto_post.py
+# auto_post.py (Yoast 제거 버전)
 
 import requests, random, json, openai, hashlib, hmac, re, time
 from time import gmtime, strftime
@@ -7,37 +7,21 @@ from config import *
 
 openai.api_key = OPENAI_API_KEY
 
-# ✅ 최신 쿠팡 카테고리 ID → 워드프레스 카테고리 슬러그 매핑
+# ✅ 쿠팡 카테고리 매핑
 COUPANG_CATEGORY_SLUG_MAP = {
-    1001: "hot-now",         # 여성패션
-    1002: "hot-now",         # 남성패션
-    1010: "hot-now",         # 뷰티
-    1011: "kids-life",       # 출산/유아동
-    1013: "home-living",     # 주방용품
-    1014: "daily-pick",      # 생활용품
-    1015: "home-living",     # 홈인테리어
-    1016: "tech-gadgets",    # 가전디지털
-    1017: "travel-leisure",  # 스포츠/레저
-    1018: "daily-pick",      # 자동차용품
-    1019: "daily-pick",      # 도서/음반/DVD
-    1020: "daily-pick",      # 완구/취미
-    1021: "daily-pick",      # 문구/오피스
-    1024: "daily-pick",      # 헬스/건강식품
-    1025: "travel-leisure",  # 국내여행
-    1026: "travel-leisure",  # 해외여행
-    1029: "pet-picks",       # 반려동물용품
-    1030: "kids-life",       # 유아동패션
+    1001: "hot-now", 1002: "hot-now", 1010: "hot-now", 1011: "kids-life",
+    1013: "home-living", 1014: "daily-pick", 1015: "home-living", 1016: "tech-gadgets",
+    1017: "travel-leisure", 1018: "daily-pick", 1019: "daily-pick", 1020: "daily-pick",
+    1021: "daily-pick", 1024: "daily-pick", 1025: "travel-leisure", 1026: "travel-leisure",
+    1029: "pet-picks", 1030: "kids-life"
 }
-
-EXCLUDE_CATEGORY = [1012]  # 식품 제외
+EXCLUDE_CATEGORY = [1012]
 VALID_CATEGORIES = [k for k in COUPANG_CATEGORY_SLUG_MAP if COUPANG_CATEGORY_SLUG_MAP[k] is not None and k not in EXCLUDE_CATEGORY]
 
-# ✅ 진행 바 출력
 def print_progress(percent, message):
     bar = '█' * int(percent/3.3) + '░' * (30 - int(percent/3.3))
     print(f"[{bar}] {percent}% - {message}")
 
-# ✅ HMAC 인증 생성
 def generateHmac(method, full_url_path, secretKey, accessKey):
     signed_date = strftime('%y%m%dT%H%M%SZ', gmtime())
     path, query = full_url_path.split('?', 1) if '?' in full_url_path else (full_url_path, "")
@@ -45,7 +29,6 @@ def generateHmac(method, full_url_path, secretKey, accessKey):
     signature = hmac.new(secretKey.encode(), message.encode(), hashlib.sha256).hexdigest()
     return f"CEA algorithm=HmacSHA256, access-key={accessKey}, signed-date={signed_date}, signature={signature}"
 
-# ✅ 쿠팡 베스트 상품 무작위 가져오기
 def get_random_best_product():
     for _ in range(5):
         category_id = random.choice(VALID_CATEGORIES)
@@ -64,7 +47,6 @@ def get_random_best_product():
             }
     raise Exception("🚨 쿠팡 상품 불러오기 실패")
 
-# ✅ GPT 리뷰 생성 (HTML 형식)
 def generate_review(product_name, product_info=""):
     prompt = f"""
 '{product_name}'에 대해 실제 사용자 후기와 상품 정보를 바탕으로, 다음 HTML 형식으로 정보성 블로그 글을 작성해주세요:
@@ -72,7 +54,6 @@ def generate_review(product_name, product_info=""):
 - 직접 사용한 내용은 포함하지 말고, 사용자들의 리뷰와 온라인 정보 기반으로 작성
 - 자연스러운 문체와 함께, 실사용 리뷰처럼 보이도록 구성
 - 3000자 이상, 800단어 이상
-
 
 <h2>제목 (제품의 특징을 살짝 강조한 한 문장)</h2>
 <p>제품을 소개하는 자연스러운 시작 문단</p>
@@ -101,12 +82,10 @@ def generate_review(product_name, product_info=""):
 
 <hr>
 
-
 <h3>🔗 제품 정보 바로가기</h3>
 <p><a href="{product_info}" target="_blank" rel="noopener noreferrer" style="color:#2b7ec7; font-weight:bold;">
 👉 쿠팡 상세 페이지에서 더 많은 정보 보기
 </a></p>
-
 """
     res = openai.ChatCompletion.create(
         model="gpt-4",
@@ -118,7 +97,6 @@ def generate_review(product_name, product_info=""):
     )
     return res['choices'][0]['message']['content']
 
-# ✅ 텍스트 정리 (GPT 결과 마크업 제거용)
 def clean_text(text):
     return re.sub(r'\*\*|__', '', text)
 
@@ -127,31 +105,23 @@ def shorten_description(text):
         return text.split(',')[0].strip()
     return text.strip()
 
-# ✅ SEO 정보 정리
 def apply_seo_fixes(review, html, product_name):
     keyword = product_name if len(product_name) <= 20 else ' '.join(product_name.split()[:6])
     meta = review.strip().split('\n')[0]
     if keyword not in meta:
         meta = f"{keyword}에 대한 실사용 후기와 요약 정보입니다. " + meta
         meta = (meta + " 다양한 사용자 의견을 바탕으로 정리했습니다.")[:155]
-
         html = f"<p><strong>{keyword}</strong>에 대해 궁금하신가요? 아래에서 자세히 알려드릴게요!</p>\n" + html
-        html += """
- 
-    """
     return html, meta, keyword
 
-
-# ✅ 메타 삽입
 def insert_seo_meta(html, keyword, meta_desc):
-    return html
+    intro = f"<p><strong>{keyword}</strong>에 대해 궁금하신가요? 아래에서 자세히 알려드릴게요!</p>\n"
+    return intro + html
 
-# ✅ 카테고리 생성 (슬러그 기준)
 def get_or_create_category(slug):
     r = requests.get(f"{WP_URL.replace('/posts', '/categories')}?slug={slug}", auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
     if r.status_code == 200 and r.json():
         return r.json()[0]['id']
-
     name_map = {
         "tech-gadgets": "🎧 테크・가전",
         "home-living": "🏠 홈리빙",
@@ -173,7 +143,7 @@ def get_or_create_category(slug):
         auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
     )
     return res.json()['id']
-# ✅ 태그 생성
+
 def generate_tags(product_name):
     return [w for w in re.findall(r'[가-힣a-zA-Z0-9]+', product_name) if len(w) > 1][:5]
 
@@ -193,27 +163,9 @@ def get_or_create_tags(tag_names):
             tag_ids.append(res.json()['id'])
     return tag_ids
 
-# ✅ 슬러그 자동 증가
-def get_next_slug_index(prefix):
-    page, max_index = 1, 0
-    while True:
-        r = requests.get(f"{WP_URL}?per_page=100&page={page}", auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
-        if r.status_code != 200 or not r.json():
-            break
-        for post in r.json():
-            m = re.match(rf"{prefix}-(\d+)", post.get("slug", ""))
-            if m:
-                max_index = max(max_index, int(m.group(1)))
-        page += 1
-    return max_index + 1
-
-# ✅ HTML 템플릿
 def build_html(product, content):
     return f"""
-<p>
-    💰 <strong>가격:</strong> {product['price']}원 &nbsp;|&nbsp;
-    ⭐ <strong>평점:</strong> ⭐⭐⭐⭐점 &nbsp;|&nbsp;
-</p>
+<p>💰 <strong>가격:</strong> {product['price']}원 &nbsp;|&nbsp; ⭐ <strong>평점:</strong> ⭐⭐⭐⭐점</p>
 <h5>※쿠팡 파트너스 활동의 일환으로, 일정액의 수수료를 제공받습니다.※</h5>
 <div style="border:1px solid #ddd; padding:15px; background:#f9f9f9; border-radius:10px;">
     <img src="{product['image']}" style="max-width:100%; border-radius:10px;">
@@ -222,6 +174,7 @@ def build_html(product, content):
 <h3>📦 제품 리뷰</h3>
 {content}
 """
+
 def upload_image_to_wp(img_url):
     img_data = requests.get(img_url).content
     filename = img_url.split("/")[-1]
@@ -241,17 +194,12 @@ def upload_image_to_wp(img_url):
         print("⚠️ 이미지 업로드 실패:", media_response.status_code, media_response.text)
         return None
 
-# ✅ 워드프레스 포스트 등록
 def post_to_wp(product, html, keyword, meta_desc, category_slug):
     tag_ids = get_or_create_tags(generate_tags(product['name']))
     cat_id = get_or_create_category(category_slug)
     slug = product['name'].strip().replace(" ", "-")
-
-    # 이미지 업로드
-    # ✅ 쿠팡 이미지 워드프레스에 업로드 후 ID 확보
     featured_image_id = upload_image_to_wp(product['image'])
 
-    # ✅ 1차 등록 (POST) – 메타 포함
     post = {
         "title": f"{product['name']} 리뷰",
         "slug": slug,
@@ -260,14 +208,14 @@ def post_to_wp(product, html, keyword, meta_desc, category_slug):
         "tags": tag_ids,
         "categories": [cat_id],
         "meta": {
-            "_yoast_wpseo_focuskw": shorten_description(keyword),
-            "_yoast_wpseo_metadesc": meta_desc
+            "_custom_meta_description": meta_desc,
+            "_custom_meta_keywords": keyword
         }
     }
 
     if featured_image_id:
         post["featured_media"] = featured_image_id
-    # ✅ 워드프레스 API에 포스트 등록
+
     r = requests.post(
         WP_URL,
         headers={"Content-Type": "application/json"},
@@ -281,14 +229,9 @@ def post_to_wp(product, html, keyword, meta_desc, category_slug):
     pid = r.json()["id"]
     print(f"✅ 글 등록 성공 - ID {pid}")
 
-    # ✅ 2차 수정 (PUT) – Yoast 메타 필드 다시 넣고 강제 리프레시 태그 삽입
-    time.sleep(5)
+    time.sleep(3)
     patch = {
-        "content": html + "\n<!-- YOAST REFRESH -->",  # <- 트리거용
-        "meta": {
-            "_yoast_wpseo_focuskw": shorten_description(keyword),
-            "_yoast_wpseo_metadesc": meta_desc
-        }
+        "content": html + "\n<!-- REFRESH -->"
     }
 
     patch_res = requests.put(
@@ -297,23 +240,7 @@ def post_to_wp(product, html, keyword, meta_desc, category_slug):
         data=json.dumps(patch),
         auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
     )
-
     print("📦 PATCH 응답 코드:", patch_res.status_code)
-    print("📦 PATCH 응답 내용:", patch_res.text)
-
-    if patch_res.status_code in [200, 201]:
-        print("✅ Yoast 메타 필드 반영 완료 (PUT)")
-    else:
-        print("⚠️ Yoast 메타 PUT 실패:", patch_res.status_code, patch_res.text)
-
-    # ✅ Yoast 점수 트리거 호출
-    refresh_url = f"https://mgddang.com/wp-json/custom/v1/yoast-refresh/{pid}"
-    refresh = requests.post(refresh_url)
-    if refresh.status_code == 200:
-        print("✅ Yoast 점수 트리거 완료")
-    else:
-        print("⚠️ Yoast 트리거 실패:", refresh.status_code)
-
 
 # ✅ 메인 실행
 if __name__ == "__main__":
