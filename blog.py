@@ -115,8 +115,7 @@ def apply_seo_fixes(review, html, product_name):
     return html, meta, keyword
 
 def insert_seo_meta(html, keyword, meta_desc):
-    intro = f"<p><strong>{keyword}</strong>에 대해 궁금하신가요? 아래에서 자세히 알려드릴게요!</p>\n"
-    return intro + html
+    return html
 
 def get_or_create_category(slug):
     r = requests.get(f"{WP_URL.replace('/posts', '/categories')}?slug={slug}", auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
