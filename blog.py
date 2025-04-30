@@ -18,6 +18,9 @@ COUPANG_CATEGORY_SLUG_MAP = {
 EXCLUDE_CATEGORY = [1012]
 VALID_CATEGORIES = [k for k in COUPANG_CATEGORY_SLUG_MAP if COUPANG_CATEGORY_SLUG_MAP[k] is not None and k not in EXCLUDE_CATEGORY]
 
+def extract_main_title(text):
+    return text.split(',')[0].strip()
+
 def print_progress(percent, message):
     bar = '█' * int(percent/3.3) + '░' * (30 - int(percent/3.3))
     print(f"[{bar}] {percent}% - {message}")
@@ -100,22 +103,21 @@ def generate_review(product_name, product_info=""):
 def clean_text(text):
     return re.sub(r'\*\*|__', '', text)
 
-def shorten_description(text):
-    if ',' in text:
-        return text.split(',')[0].strip()
-    return text.strip()
-
 def apply_seo_fixes(review, html, product_name):
-    keyword = product_name if len(product_name) <= 20 else ' '.join(product_name.split()[:6])
-    meta = review.strip().split('\n')[0]
-    if keyword not in meta:
-        meta = f"{keyword}에 대한 실사용 후기와 요약 정보입니다. " + meta
-        meta = (meta + " 다양한 사용자 의견을 바탕으로 정리했습니다.")[:155]
-        html = f"<p><strong>{keyword}</strong>에 대해 궁금하신가요? 아래에서 자세히 알려드릴게요!</p>\n" + html
+    keyword = extract_main_title(product_name)  # 쉼표 앞까지
+    meta = f"{keyword} 다양한 사용자 후기 기반 요약입니다."
+    html = f"<p><strong>{keyword}</strong>에 대해 궁금하신가요? 아래에서 자세히 알려드릴게요!</p>\n" + html
     return html, meta, keyword
 
-def insert_seo_meta(html, keyword, meta_desc):
-    return html
+def insert_seo_meta(html, keyword, meta_desc, image_url):
+    og_tags = f"""
+<!-- 🔵 Open Graph Meta Tags -->
+<meta property="og:title" content="{keyword}" />
+<meta property="og:description" content="{meta_desc}" />
+<meta property="og:image" content="{image_url}" />
+<meta property="og:type" content="article" />
+"""
+    return og_tags + html
 
 def get_or_create_category(slug):
     r = requests.get(f"{WP_URL.replace('/posts', '/categories')}?slug={slug}", auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
@@ -164,7 +166,7 @@ def get_or_create_tags(tag_names):
 
 def build_html(product, content):
     return f"""
-<p>💰 <strong>가격:</strong> {product['price']}원 &nbsp;|&nbsp; ⭐ <strong>평점:</strong> ⭐⭐⭐⭐점</p>
+<p>{product['name']}<br> 💰 <strong>가격:</strong> {product['price']}원 &nbsp;|&nbsp; ⭐ <strong>평점:</strong> ⭐⭐⭐⭐점</p>
 <h5>※쿠팡 파트너스 활동의 일환으로, 일정액의 수수료를 제공받습니다.※</h5>
 <div style="border:1px solid #ddd; padding:15px; background:#f9f9f9; border-radius:10px;">
     <img src="{product['image']}" style="max-width:100%; border-radius:10px;">
@@ -196,7 +198,7 @@ def upload_image_to_wp(img_url):
 def post_to_wp(product, html, keyword, meta_desc, category_slug):
     tag_ids = get_or_create_tags(generate_tags(product['name']))
     cat_id = get_or_create_category(category_slug)
-    slug = product['name'].strip().replace(" ", "-")
+    slug = product['name'].strip().replace(" ", "-")  # ← 여기
     featured_image_id = upload_image_to_wp(product['image'])
 
     post = {
@@ -229,6 +231,23 @@ def post_to_wp(product, html, keyword, meta_desc, category_slug):
     print(f"✅ 글 등록 성공 - ID {pid}")
 
     time.sleep(3)
+
+    # 🔧 Yoast SEO 메타 추가
+    seo_patch = {
+        "meta": {
+            "_yoast_wpseo_focuskw": keyword,
+            "_yoast_wpseo_title": f"{product['name']} 리뷰",
+            "_yoast_wpseo_metadesc": meta_desc
+        }
+    }
+    seo_res = requests.post(
+        f"{WP_URL}/{pid}",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps(seo_patch),
+        auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+    )
+    print("🔧 SEO 메타 패치 응답:", seo_res.status_code)
+
     patch = {
         "content": html + "\n<!-- REFRESH -->"
     }
@@ -241,6 +260,18 @@ def post_to_wp(product, html, keyword, meta_desc, category_slug):
     )
     print("📦 PATCH 응답 코드:", patch_res.status_code)
 
+    # ✅✅ 여기 추가! ✅✅
+    time.sleep(2)
+    refresh_res = requests.put(
+        f"{WP_URL}/{pid}",
+        headers={"Content-Type": "application/json"},
+        data=json.dumps({
+            "status": "publish"  # publish 상태로 다시 저장
+        }),
+        auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+    )
+    print("🛠️ 글 저장 트리거 응답:", refresh_res.status_code)
+
 # ✅ 메인 실행
 if __name__ == "__main__":
     try:
@@ -251,7 +282,7 @@ if __name__ == "__main__":
         print_progress(50, "리뷰 생성 중...")
         content = clean_text(review)
         content, meta_desc, keyword = apply_seo_fixes(review, content, product['name'])
-        html = insert_seo_meta(build_html(product, content), keyword, meta_desc)
+        html = insert_seo_meta(build_html(product, content), keyword, meta_desc, product['image'])
         print_progress(75, "SEO 최적화 HTML 생성 중...")
         category_slug = COUPANG_CATEGORY_SLUG_MAP.get(product['cat_id'], "hot-now")
         post_to_wp(product, html, keyword, meta_desc, category_slug)
