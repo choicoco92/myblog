@@ -1,13 +1,21 @@
-# auto_post.py (Yoast 제거 버전)
+# ✅ 통합된 자동 포스팅 스크립트: 트렌드 뉴스 + 쿠팡 상품 삽입 (og:image 적용 포함 전체코드)
 
-import requests, random, json, openai, hashlib, hmac, re, time
-from time import gmtime, strftime
+import requests, json, openai, hashlib, hmac, re, time, feedparser, random
 from requests.auth import HTTPBasicAuth
+from bs4 import BeautifulSoup
 from config import *
 
 openai.api_key = OPENAI_API_KEY
 
-# ✅ 쿠팡 카테고리 매핑
+CATEGORY_MAP = {
+    "today-trend": "🌍 오늘의 트렌드",
+    "ai-tech": "🤖 AI & 기술",
+    "life-hacks": "🧠 생활정보",
+    "today-video": "🎬 오늘의 영상",
+    "briefing": "✍️ 짧은 브리핑",
+    "archive": "📚 아카이브"
+}
+
 COUPANG_CATEGORY_SLUG_MAP = {
     1001: "hot-now", 1002: "hot-now", 1010: "hot-now", 1011: "kids-life",
     1013: "home-living", 1014: "daily-pick", 1015: "home-living", 1016: "tech-gadgets",
@@ -15,17 +23,9 @@ COUPANG_CATEGORY_SLUG_MAP = {
     1021: "daily-pick", 1024: "daily-pick", 1025: "travel-leisure", 1026: "travel-leisure",
     1029: "pet-picks", 1030: "kids-life"
 }
-EXCLUDE_CATEGORY = [1012]
-VALID_CATEGORIES = [k for k in COUPANG_CATEGORY_SLUG_MAP if COUPANG_CATEGORY_SLUG_MAP[k] is not None and k not in EXCLUDE_CATEGORY]
-
-def extract_main_title(text):
-    return text.split(',')[0].strip()
-
-def print_progress(percent, message):
-    bar = '█' * int(percent/3.3) + '░' * (30 - int(percent/3.3))
-    print(f"[{bar}] {percent}% - {message}")
 
 def generateHmac(method, full_url_path, secretKey, accessKey):
+    from time import gmtime, strftime
     signed_date = strftime('%y%m%dT%H%M%SZ', gmtime())
     path, query = full_url_path.split('?', 1) if '?' in full_url_path else (full_url_path, "")
     message = signed_date + method + path + query
@@ -34,7 +34,7 @@ def generateHmac(method, full_url_path, secretKey, accessKey):
 
 def get_random_best_product():
     for _ in range(5):
-        category_id = random.choice(VALID_CATEGORIES)
+        category_id = random.choice(list(COUPANG_CATEGORY_SLUG_MAP.keys()))
         path = f"/v2/providers/affiliate_open_api/apis/openapi/products/bestcategories/{category_id}?limit=30"
         url = f"https://api-gateway.coupang.com{path}"
         auth_header = generateHmac("GET", path, CP_SECRET_KEY, CP_ACCESS_KEY)
@@ -44,115 +44,134 @@ def get_random_best_product():
             return {
                 "name": p["productName"],
                 "image": p["productImage"],
-                "price": p["productPrice"],
-                "url": p["productUrl"],
-                "cat_id": category_id
+                "url": p["productUrl"]
             }
-    raise Exception("🚨 쿠팡 상품 불러오기 실패")
+    return None
 
-def generate_review(product_name, product_info=""):
+def extract_og_image(url):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=5)
+        if resp.status_code != 200:
+            return None
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        og_tag = soup.find("meta", property="og:image")
+        if og_tag and og_tag.get("content"):
+            return og_tag["content"]
+    except Exception as e:
+        print("⚠️ og:image 추출 실패:", e)
+    return None
+
+def map_keyword_to_category(keyword):
+    keyword = keyword.lower()
+    if any(k in keyword for k in ["ai", "chatgpt", "gpt", "suno"]):
+        return "ai-tech"
+    elif any(k in keyword for k in ["다이어트", "생활", "정리", "절약"]):
+        return "life-hacks"
+    elif any(k in keyword for k in ["유튜브", "youtube", "영상", "쇼츠"]):
+        return "today-video"
+    elif any(k in keyword for k in ["뉴스", "속보", "헤드라인"]):
+        return "briefing"
+    elif any(k in keyword for k in ["결산", "요약", "통계", "톱10"]):
+        return "archive"
+    else:
+        return "today-trend"
+
+def get_trending_with_news(count=3):
+    url = "https://trends.google.com/trending/rss?geo=KR"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    raw_feed = requests.get(url, headers=headers).text
+    feed = feedparser.parse(raw_feed)
+
+    all_entries = feed.entries
+    seen = set()
+    unique_entries = []
+    for entry in all_entries:
+        title = entry.title
+        if title not in seen:
+            seen.add(title)
+            unique_entries.append(entry)
+
+    random.shuffle(unique_entries)
+    selected = unique_entries[:count]
+
+    results = []
+    for entry in selected:
+        keyword = entry.title
+        category = map_keyword_to_category(keyword)
+        news_titles = []
+        image_url = None
+        news_url = None
+
+        if 'ht_news_item_title' in entry:
+            news_titles.append(entry.ht_news_item_title)
+        elif 'ht_news_item' in entry:
+            news_titles.append(entry.ht_news_item[0]['ht_news_item_title'])
+
+        if 'ht_news_item_url' in entry:
+            news_url = entry.ht_news_item_url
+        elif 'ht_news_item' in entry and 'ht_news_item_url' in entry.ht_news_item[0]:
+            news_url = entry.ht_news_item[0]['ht_news_item_url']
+
+        if news_url:
+            image_url = extract_og_image(news_url)
+            print(f"🔗 뉴스 URL: {news_url}")
+            print(f"🖼 추출된 og:image: {image_url}")
+
+        results.append((keyword, news_titles, category, image_url))
+
+    return results
+
+# 블로그 글 생성
+
+def generate_blog_content(keyword, news_titles, category):
+    joined_titles = "\n".join([f"- {t}" for t in news_titles])
     prompt = f"""
-'{product_name}'에 대해 실제 사용자 후기와 상품 정보를 바탕으로, 다음 HTML 형식으로 정보성 블로그 글을 작성해주세요:
-조건:
-- 직접 사용한 내용은 포함하지 말고, 사용자들의 리뷰와 온라인 정보 기반으로 작성
-- 자연스러운 문체와 함께, 실사용 리뷰처럼 보이도록 구성
+📰 '{keyword}'와 관련된 최근 뉴스 제목은 다음과 같습니다:
+{joined_titles}
+
+이 내용을 바탕으로 SEO 최적화된 블로그 글을 작성해주세요.
+- 카테고리: {category}
+- 자연스러운 문체와 함께, 실제 트랜드리뷰처럼 보이도록 구성
 - 3000자 이상, 800단어 이상
-
-<h2>제목 (제품의 특징을 살짝 강조한 한 문장)</h2>
-<p>제품을 소개하는 자연스러운 시작 문단</p>
-
-<h2>🔍 주요 특징</h2>
-<ul><li>제품 스펙, 기능 요약</li></ul>
-<p>실제 활용성 중심으로 설명</p>
-
-<h2>💬 사용자 후기 요약</h2>
-<ul><li>실제 사용자들이 자주 언급한 리뷰 요약</li></ul>
-
-<h2>👍 장점 & 👎 단점</h2>
-<p><strong>장점:</strong></p>
-<ul><li>실제 장점</li></ul>
-<p><strong>단점:</strong></p>
-<ul><li>실제 단점</li></ul>
-
-<h2>⚠️ 구매 전 체크포인트</h2>
-<p>주의사항이나 부가사항</p>
-
-<h2>🎯 이런 분께 추천해요</h2>
-<ul><li>추천 대상</li></ul>
-
-<h2>📝 총평</h2>
-<p>전체 요약과 감성 마무리 멘트</p>
-
-<hr>
-
-<h3>🔗 제품 정보 바로가기</h3>
-<p><a href="{product_info}" target="_blank" rel="noopener noreferrer" style="color:#2b7ec7; font-weight:bold;">
-👉 쿠팡 상세 페이지에서 더 많은 정보 보기
-</a></p>
+- 친근하고 정보성 있는 말투
+- 키워드를 적절히 반복 사용
+- 이모지를 적절히 활용하여 가독성 높이기
+- HTML 태그 포함 (<h2>, <p> 등)
 """
     res = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[
-            {"role": "system", "content": "당신은 실사용 리뷰를 분석하고 요약하는 블로거입니다."},
-            {"role": "user", "content": prompt}
-        ],
+        messages=[{"role": "user", "content": prompt}],
         temperature=0.7
     )
     return res['choices'][0]['message']['content']
 
-def clean_text(text):
-    return re.sub(r'\*\*|__', '', text)
 
-def apply_seo_fixes(review, html, product_name):
-    keyword = extract_main_title(product_name)  # 쉼표 앞까지
-    meta = f"{keyword} 다양한 사용자 후기 기반 요약입니다."
-    html = f"<p><strong>{keyword}</strong>에 대해 궁금하신가요? 아래에서 자세히 알려드릴게요!</p>\n" + html
-    return html, meta, keyword
+def extract_tags_from_text(keyword, news_titles):
+    base = " ".join(news_titles) + " " + keyword
+    words = re.findall(r'[가-힣a-zA-Z]{2,20}', base)
+    return list(set(words))[:5]
 
-def insert_seo_meta(html, keyword, meta_desc, image_url):
-    og_tags = f"""
-<!-- 🔵 Open Graph Meta Tags -->
-<meta property="og:title" content="{keyword}" />
-<meta property="og:description" content="{meta_desc}" />
-<meta property="og:image" content="{image_url}" />
-<meta property="og:type" content="article" />
-"""
-    return og_tags + html
 
 def get_or_create_category(slug):
     r = requests.get(f"{WP_URL.replace('/posts', '/categories')}?slug={slug}", auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
     if r.status_code == 200 and r.json():
         return r.json()[0]['id']
-    name_map = {
-        "tech-gadgets": "🎧 테크・가전",
-        "home-living": "🏠 홈리빙",
-        "travel-leisure": "🎒 여행・레저",
-        "daily-pick": "🧼 생활꿀템",
-        "pet-picks": "🐾 반려동물",
-        "kids-life": "👶 유아동",
-        "hot-now": "📰 오늘의 추천",
-    }
-    name = name_map.get(slug, slug)
+    name = CATEGORY_MAP.get(slug, slug)
     res = requests.post(
         f"{WP_URL.replace('/posts', '/categories')}",
         headers={"Content-Type": "application/json"},
-        data=json.dumps({
-            "name": name,
-            "slug": slug,
-            "description": f"{name} 관련 콘텐츠 모음입니다."
-        }),
+        data=json.dumps({"name": name, "slug": slug}),
         auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
     )
-    return res.json()['id']
+    return res.json().get('id')
 
-def generate_tags(product_name):
-    return [w for w in re.findall(r'[가-힣a-zA-Z0-9]+', product_name) if len(w) > 1][:5]
 
 def get_or_create_tags(tag_names):
     tag_ids = []
     for tag in tag_names:
         r = requests.get(f"{WP_URL.replace('/posts', '/tags')}?search={tag}", auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
-        if r.json():
+        if r.status_code == 200 and r.json():
             tag_ids.append(r.json()[0]['id'])
         else:
             res = requests.post(
@@ -161,27 +180,46 @@ def get_or_create_tags(tag_names):
                 data=json.dumps({"name": tag}),
                 auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
             )
-            tag_ids.append(res.json()['id'])
+            res_json = res.json()
+            tag_ids.append(res_json.get("id", res_json.get("data", {}).get("term_id")))
     return tag_ids
 
-def build_html(product, content):
-    return f"""
-<p>{product['name']}<br> 💰 <strong>가격:</strong> {product['price']}원 &nbsp;|&nbsp; ⭐ <strong>평점:</strong> ⭐⭐⭐⭐점</p>
-<h5>※쿠팡 파트너스 활동의 일환으로, 일정액의 수수료를 제공받습니다.※</h5>
-<div style="border:1px solid #ddd; padding:15px; background:#f9f9f9; border-radius:10px;">
-    <img src="{product['image']}" style="max-width:100%; border-radius:10px;">
-    <br><a href="{product['url']}" target="_blank" style="display:inline-block; margin-top:10px; background:#ff4800; color:white; padding:10px 20px; border-radius:5px;">🛒 최저가 보러가기</a>
-</div>
-<h3>📦 제품 리뷰</h3>
-{content}
-"""
 
-def upload_image_to_wp(img_url):
-    img_data = requests.get(img_url).content
-    filename = img_url.split("/")[-1]
+def reword_title(keyword):
+    patterns = [
+        f"{keyword} 요즘 왜 난리일까?",
+        f"{keyword} 이슈, 알고 보면 충격적입니다",
+        f"{keyword} 지금 안 보면 후회합니다 🔥",
+        f"{keyword} 왜 갑자기 떴을까?",
+        f"{keyword} 숨겨진 뒷이야기 공개!",
+        f"{keyword} 진짜 이유는 따로 있다",
+        f"{keyword} 뉴스 보다가 소름 돋은 이유"
+    ]
+    return random.choice(patterns)
+
+
+def generate_meta_description(title):
+    patterns = [
+        f"{title} 지금 핫한 이유, 요약해드립니다.",
+        f"{title} 이슈, 핵심만 딱 정리했어요.",
+        f"{title} 뉴스 요약, 1분 만에 정리!"
+    ]
+    return random.choice(patterns)
+
+
+def upload_image_to_wp(image_url):
+    img_data = requests.get(image_url).content
+    filename = image_url.split("/")[-1]
+    ext = filename.split('.')[-1].lower()
+    content_type = {
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "png": "image/png",
+        "webp": "image/webp"
+    }.get(ext, "image/jpeg")
     media_headers = {
         "Content-Disposition": f"attachment; filename={filename}",
-        "Content-Type": "image/jpeg"
+        "Content-Type": content_type
     }
     media_response = requests.post(
         WP_URL.replace("/posts", "/media"),
@@ -190,32 +228,48 @@ def upload_image_to_wp(img_url):
         auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
     )
     if media_response.status_code in [200, 201]:
-        return media_response.json()["id"]
+        media_json = media_response.json()
+        print("✅ 이미지 업로드 성공:", media_json.get("source_url"))
+        return media_json["id"]
     else:
         print("⚠️ 이미지 업로드 실패:", media_response.status_code, media_response.text)
         return None
 
-def post_to_wp(product, html, keyword, meta_desc, category_slug):
-    tag_ids = get_or_create_tags(generate_tags(product['name']))
+
+def post_to_wordpress(title, html, category_slug, image_url):
     cat_id = get_or_create_category(category_slug)
-    slug = product['name'].strip().replace(" ", "-")  # ← 여기
-    featured_image_id = upload_image_to_wp(product['image'])
+    meta_desc = generate_meta_description(title)
+    slug = re.sub(r'\s+', '-', title.lower())
+    tag_ids = get_or_create_tags(extract_tags_from_text(title, [title]))
+
+    media_id = None
+    if image_url:
+        media_id = upload_image_to_wp(image_url)
+        html = f'<img src="{image_url}" alt="{title}" style="max-width:100%; border-radius:10px;" />\n<br>{title} <br>' + html
+
+    product = get_random_best_product()
+    if product:
+        html += f"""
+<h3>🛍️ 오늘의 추천 아이템</h3>
+<p><strong>{product['name']}</strong> 제품이에요!</p>
+<img src="{product['image']}" style="max-width:100%; border-radius:10px;">
+<br>
+<a href="{product['url']}" target="_blank" style="display:inline-block; margin-top:10px; background:#ff4800; color:white; padding:10px 20px; border-radius:5px;">🛒 상세 보기</a>
+"""
 
     post = {
-        "title": f"{product['name']} 리뷰",
+        "title": reword_title(title),
         "slug": slug,
         "content": html,
         "status": "publish",
-        "tags": tag_ids,
         "categories": [cat_id],
+        "tags": tag_ids,
         "meta": {
-            "_custom_meta_description": meta_desc,
-            "_custom_meta_keywords": keyword
+            "_yoast_wpseo_focuskw": title,
+            "_yoast_wpseo_title": title,
+            "_yoast_wpseo_metadesc": meta_desc
         }
     }
-
-    if featured_image_id:
-        post["featured_media"] = featured_image_id
 
     r = requests.post(
         WP_URL,
@@ -224,68 +278,39 @@ def post_to_wp(product, html, keyword, meta_desc, category_slug):
         auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
     )
 
-    if r.status_code not in [200, 201]:
-        raise Exception(f"등록 실패: {r.status_code}, {r.text}")
+    if r.status_code in [200, 201]:
+        post_id = r.json().get("id")
+        print("✅ 글 등록 완료:", r.json().get('link'))
 
-    pid = r.json()["id"]
-    print(f"✅ 글 등록 성공 - ID {pid}")
+        if media_id:
+            patch_res = requests.put(
+                f"{WP_URL}/{post_id}",
+                headers={"Content-Type": "application/json"},
+                data=json.dumps({"featured_media": media_id}),
+                auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+            )
+            print("🖼 대표 이미지 저장 응답:", patch_res.status_code)
 
-    time.sleep(3)
+            refresh_res = requests.put(
+                f"{WP_URL}/{post_id}",
+                headers={"Content-Type": "application/json"},
+                data=json.dumps({"status": "publish"}),
+                auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+            )
+            print("🔄 재저장 완료:", refresh_res.status_code)
 
-    # 🔧 Yoast SEO 메타 추가
-    seo_patch = {
-        "meta": {
-            "_yoast_wpseo_focuskw": keyword,
-            "_yoast_wpseo_title": f"{product['name']} 리뷰",
-            "_yoast_wpseo_metadesc": meta_desc
-        }
-    }
-    seo_res = requests.post(
-        f"{WP_URL}/{pid}",
-        headers={"Content-Type": "application/json"},
-        data=json.dumps(seo_patch),
-        auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
-    )
-    print("🔧 SEO 메타 패치 응답:", seo_res.status_code)
+    else:
+        print("❌ 등록 실패:", r.text)
 
-    patch = {
-        "content": html + "\n<!-- REFRESH -->"
-    }
 
-    patch_res = requests.put(
-        f"{WP_URL}/{pid}",
-        headers={"Content-Type": "application/json"},
-        data=json.dumps(patch),
-        auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
-    )
-    print("📦 PATCH 응답 코드:", patch_res.status_code)
-
-    # ✅✅ 여기 추가! ✅✅
-    time.sleep(2)
-    refresh_res = requests.put(
-        f"{WP_URL}/{pid}",
-        headers={"Content-Type": "application/json"},
-        data=json.dumps({
-            "status": "publish"  # publish 상태로 다시 저장
-        }),
-        auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
-    )
-    print("🛠️ 글 저장 트리거 응답:", refresh_res.status_code)
-
-# ✅ 메인 실행
 if __name__ == "__main__":
-    try:
-        print_progress(0, "시작 중...")
-        product = get_random_best_product()
-        print_progress(25, "상품 로딩 중...")
-        review = generate_review(product['name'], product['url'])
-        print_progress(50, "리뷰 생성 중...")
-        content = clean_text(review)
-        content, meta_desc, keyword = apply_seo_fixes(review, content, product['name'])
-        html = insert_seo_meta(build_html(product, content), keyword, meta_desc, product['image'])
-        print_progress(75, "SEO 최적화 HTML 생성 중...")
-        category_slug = COUPANG_CATEGORY_SLUG_MAP.get(product['cat_id'], "hot-now")
-        post_to_wp(product, html, keyword, meta_desc, category_slug)
-        print_progress(100, "업로드 완료 ✅")
-    except Exception as e:
-        print("❌ 오류 발생:", e)
+    items = get_trending_with_news(count=1)
+    for idx, (keyword, news, category, image_url) in enumerate(items, 1):
+        print(f"\n🌀 [{idx}] {keyword} 처리 중...")
+        if not news:
+            print("⚠️ 뉴스 없음, 건너뜀")
+            continue
+        html = generate_blog_content(keyword, news, CATEGORY_MAP[category])
+        post_to_wordpress(keyword, html, category, image_url)
+        time.sleep(2)
+    print("\n🎉 전체 포스팅 완료!")
