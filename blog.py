@@ -251,6 +251,7 @@ def post_to_wordpress(title, html, category_slug, image_url):
     if product:
         html += f"""
 <h3>🛍️ 오늘의 추천 아이템</h3>
+<p><strong>이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</strong></p>
 <p><strong>{product['name']}</strong> 제품이에요!</p>
 <img src="{product['image']}" style="max-width:100%; border-radius:10px;">
 <br>
