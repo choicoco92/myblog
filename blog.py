@@ -1,8 +1,19 @@
 # ✅ 통합된 자동 포스팅 스크립트: 트렌드 뉴스 + 쿠팡 상품 삽입 (og:image 적용 포함 전체코드)
 
+
 import requests, json, openai, hashlib, hmac, re, time, feedparser, random
 from requests.auth import HTTPBasicAuth
 from bs4 import BeautifulSoup
+import requests
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.support.ui import WebDriverWait
+from urllib.parse import quote
+from urllib.parse import urlparse, unquote
 from config import *
 
 openai.api_key = OPENAI_API_KEY
@@ -48,6 +59,20 @@ def get_random_best_product():
             }
     return None
 
+def get_news_title_from_url(news_url):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(news_url, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        title_tag = soup.find("meta", property="og:title")
+        if title_tag:
+            return title_tag["content"].strip()
+        return soup.title.string.strip() if soup.title else None
+    except Exception as e:
+        print(f"⚠️ 뉴스 제목 추출 실패: {e}")
+        return None
+
+
 def extract_og_image(url):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -78,49 +103,74 @@ def map_keyword_to_category(keyword):
         return "today-trend"
 
 def get_trending_with_news(count=3):
-    url = "https://trends.google.com/trending/rss?geo=KR"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    raw_feed = requests.get(url, headers=headers).text
-    feed = feedparser.parse(raw_feed)
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-    all_entries = feed.entries
-    seen = set()
-    unique_entries = []
-    for entry in all_entries:
-        title = entry.title
-        if title not in seen:
-            seen.add(title)
-            unique_entries.append(entry)
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+    driver.get("https://trends.google.co.kr/trends/trendingsearches/daily?geo=KR")
+    time.sleep(3)
 
-    random.shuffle(unique_entries)
-    selected = unique_entries[:count]
+    elements = driver.find_elements(By.XPATH, '//tr[@role="row"]/td[2]/div[1]')
+    keywords = [el.text.strip() for el in elements if el.text.strip()]
+    driver.quit()
 
+    selected = keywords[:count]
     results = []
-    for entry in selected:
-        keyword = entry.title
+
+    for keyword in selected:
+        print(f"🔍 키워드: {keyword}")
+        news_url, image_url, news_title = get_news_url_and_og_image(keyword)
         category = map_keyword_to_category(keyword)
-        news_titles = []
-        image_url = None
-        news_url = None
 
-        if 'ht_news_item_title' in entry:
-            news_titles.append(entry.ht_news_item_title)
-        elif 'ht_news_item' in entry:
-            news_titles.append(entry.ht_news_item[0]['ht_news_item_title'])
+        if not news_url:
+            continue
 
-        if 'ht_news_item_url' in entry:
-            news_url = entry.ht_news_item_url
-        elif 'ht_news_item' in entry and 'ht_news_item_url' in entry.ht_news_item[0]:
-            news_url = entry.ht_news_item[0]['ht_news_item_url']
-
-        if news_url:
-            image_url = extract_og_image(news_url)
-            print(f"🔗 뉴스 URL: {news_url}")
-            print(f"🖼 추출된 og:image: {image_url}")
-
+        news_titles = [news_title] if news_title else [keyword]
         results.append((keyword, news_titles, category, image_url))
 
     return results
+
+def get_news_url_and_og_image(keyword):
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("window-size=1920x1080")
+    options.add_argument("user-agent=Mozilla/5.0")
+
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+
+    try:
+        query = quote(keyword)
+        url = f"https://search.naver.com/search.naver?query={query}"
+        driver.get(url)
+
+        wait = WebDriverWait(driver, 5)
+        links = driver.find_elements(By.CSS_SELECTOR, "a[href*='n.news.naver.com']")
+        news_url = None
+        for link in links:
+            href = link.get_attribute("href")
+            if href:
+                news_url = href
+                break
+
+        if not news_url:
+            print(f"❌ [{keyword}] 뉴스 링크 없음")
+            return None, None, None
+
+        image_url = extract_og_image(news_url)
+        news_title = get_news_title_from_url(news_url)
+        return news_url, image_url, news_title
+
+    except Exception as e:
+        print(f"⚠️ [{keyword}] 뉴스 URL/이미지 추출 실패: {e}")
+        return None, None, None
+    finally:
+        driver.quit()
 
 # 블로그 글 생성
 
@@ -130,19 +180,31 @@ def generate_blog_content(keyword, news_titles, category):
 📰 '{keyword}'와 관련된 최근 뉴스 제목은 다음과 같습니다:
 {joined_titles}
 
-이 내용을 바탕으로 SEO 최적화된 블로그 글을 작성해주세요.
-- 카테고리: {category}
-- 자연스러운 문체와 함께, 실제 트랜드리뷰처럼 보이도록 구성
-- 3000자 이상, 800단어 이상
-- 친근하고 정보성 있는 말투
-- 키워드를 적절히 반복 사용
-- 이모지를 적절히 활용하여 가독성 높이기
-- HTML 태그 포함 (<h2>, <p> 등)
+이 정보를 기반으로 SEO에 최적화된 블로그 글을 작성해주세요.
+
 """
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "너는 SEO 최적화 블로그 글을 잘 쓰는 작가입니다. 요청 조건을 반드시 지켜야 합니다. 반드시 한국어로 작성하세요. "
+                "아래 조건을 반드시 준수하세요: "
+                "1) 800단어 이상, 4000자 이상 작성, "
+                "2) <h2>, <h3>, <h4> 등 부제목에는 포커스 키워드를 넣지 않는다 또한 적절한 이모지를 자연스럽게 활용, "
+                "3) <h2>, <p> 태그 포함, "
+                f"4) 포커스 키워드 '{keyword}'는 최대 2회 이하만 자연스럽게 사용 (키워드 밀도 1% 이하), 매우중요"
+                "5) 분석형 본문 중심, 인물 및 배경 포함, "
+                "6) 글은 도입부 / 주요 이슈 요약 / 배경 설명 / 전망 / 결론 구조로 작성."
+            )
+        },
+        {"role": "user", "content": prompt}
+    ]
+
     res = openai.ChatCompletion.create(
         model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7
+        messages=messages,
+        temperature=0.7,
+        max_tokens=3200
     )
     return res['choices'][0]['message']['content']
 
@@ -200,63 +262,116 @@ def reword_title(keyword):
 
 def generate_meta_description(title):
     patterns = [
-        f"{title} 지금 핫한 이유, 요약해드립니다.",
-        f"{title} 이슈, 핵심만 딱 정리했어요.",
-        f"{title} 뉴스 요약, 1분 만에 정리!"
+        f"{title} 에 대해 지금 가장 궁금한 핵심 내용을 1분 만에 요약해드립니다. 최신 트렌드, 이슈, 그리고 알아두면 돈 되는 정보까지 총정리!",
+        f"{title} 관련 뉴스와 이슈들을 한눈에 보기 쉽게 정리했어요. 지금 알아두면 분명히 유용할 정보만 콕 집어서 전해드립니다!",
+        f"{title} 이슈가 왜 떠오르고 있는지, 지금 무엇을 준비해야 하는지까지 알 수 있는 핵심 요약 가이드입니다. 절대 놓치지 마세요!",
+        f"{title} 에 대해 지금 꼭 알아야 할 배경과 이슈를 쉽게 풀어 정리했습니다. 핵심 포인트를 3분 안에 확인하세요! 최근 많은 사람들이 관심을 갖고 있는중 " ,
+        f"{title} 에 대한 최신 정보와 트렌드를 빠르게 요약한 콘텐츠입니다. 실생활에 도움이 되는 핵심 정보만 엄선해서 담았어요!"
     ]
     return random.choice(patterns)
 
 
 def upload_image_to_wp(image_url):
-    img_data = requests.get(image_url).content
-    filename = image_url.split("/")[-1]
-    ext = filename.split('.')[-1].lower()
+    try:
+        resp = requests.get(image_url, timeout=10)
+        resp.raise_for_status()
+        img_data = resp.content
+    except Exception as e:
+        print("❌ 이미지 다운로드 실패:", e)
+        return None
+
+    # 🔧 쿼리 스트링 제거 + 안전한 확장자 추출
+    parsed_url = urlparse(image_url)
+    clean_path = parsed_url.path  # /image/abc.jpg
+    filename = clean_path.split("/")[-1]
+    filename = unquote(filename)
+    ext = filename.split(".")[-1].lower().split("?")[0]
+
     content_type = {
         "jpg": "image/jpeg",
         "jpeg": "image/jpeg",
         "png": "image/png",
         "webp": "image/webp"
     }.get(ext, "image/jpeg")
+
     media_headers = {
         "Content-Disposition": f"attachment; filename={filename}",
         "Content-Type": content_type
     }
-    media_response = requests.post(
-        WP_URL.replace("/posts", "/media"),
-        headers=media_headers,
-        data=img_data,
-        auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
-    )
-    if media_response.status_code in [200, 201]:
+
+    try:
+        media_response = requests.post(
+            WP_URL.replace("/posts", "/media"),
+            headers=media_headers,
+            data=img_data,
+            auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+        )
+        media_response.raise_for_status()
         media_json = media_response.json()
         print("✅ 이미지 업로드 성공:", media_json.get("source_url"))
         return media_json["id"]
-    else:
-        print("⚠️ 이미지 업로드 실패:", media_response.status_code, media_response.text)
+    except Exception as e:
+        print("❌ 이미지 업로드 실패:", e)
         return None
 
+def generate_tags_with_gpt(keyword, news_titles):
+    prompt = f"""
+다음 키워드를 중심으로 블로그용 태그 후보를 10개 추천해주세요. 
+
+중심 키워드: {keyword}
+관련 뉴스 제목: {" / ".join(news_titles)}
+
+조건:
+- 각 태그는 1~4단어 사이
+- 중복 없이 10개
+- 관련 인물, 기업, 지역, 상황 포함 가능
+- 쉼표로 구분된 단어 리스트만 출력
+
+예시 출력: 키워드1, 키워드2, 키워드3 ...
+"""
+    res = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.5
+    )
+    tags_str = res['choices'][0]['message']['content']
+    return [tag.strip() for tag in tags_str.split(",") if tag.strip()]
 
 def post_to_wordpress(title, html, category_slug, image_url):
     cat_id = get_or_create_category(category_slug)
     meta_desc = generate_meta_description(title)
     slug = re.sub(r'\s+', '-', title.lower())
-    tag_ids = get_or_create_tags(extract_tags_from_text(title, [title]))
+    try:
+        tag_names = generate_tags_with_gpt(title, [title])
+    except Exception as e:
+        print("⚠️ GPT 태그 생성 실패, 기본 방식으로 대체:", e)
+        tag_names = extract_tags_from_text(title, [title])
+
+    tag_ids = get_or_create_tags(tag_names)
 
     media_id = None
     if image_url:
         media_id = upload_image_to_wp(image_url)
-        html = f'<img src="{image_url}" alt="{title}" style="max-width:100%; border-radius:10px;" />\n<br>{title} <br>' + html
+        html = f'<img src="{image_url}" alt="{title}" style="max-width:100%; border-radius:10px;" />\n<br> <br>' + html
 
     product = get_random_best_product()
     if product:
         html += f"""
-<h3>🛍️ 오늘의 추천 아이템</h3>
-<p><strong>이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</strong></p>
-<p><strong>{product['name']}</strong> 제품이에요!</p>
-<img src="{product['image']}" style="max-width:100%; border-radius:10px;">
-<br>
-<a href="{product['url']}" target="_blank" style="display:inline-block; margin-top:10px; background:#ff4800; color:white; padding:10px 20px; border-radius:5px;">🛒 상세 보기</a>
-"""
+    <h3>🛍️ 오늘의 추천 아이템</h3>
+    <p><strong>이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</strong></p>
+    <p><strong>{product['name']}</strong> 제품이에요!</p>
+    <img src="{product['image']}" style="max-width:100%; border-radius:10px;">
+    <br>
+    <a href="{product['url']}" target="_blank" style="display:inline-block; margin-top:10px; background:#ff4800; color:white; padding:10px 20px; border-radius:5px;">🛒 상세 보기</a>
+    """
+
+    # ✅ 내부 링크 자동 삽입
+    html += f'''
+    <h3>📌 관련 콘텐츠 더 보기</h3>
+    <ul>
+      <li><a href="/category/{category_slug}">🌍 오늘의 뉴스 모아보기</a></li>
+    </ul>
+    '''
 
     post = {
         "title": reword_title(title),
@@ -266,9 +381,9 @@ def post_to_wordpress(title, html, category_slug, image_url):
         "categories": [cat_id],
         "tags": tag_ids,
         "meta": {
-            "_yoast_wpseo_focuskw": title,
-            "_yoast_wpseo_title": title,
-            "_yoast_wpseo_metadesc": meta_desc
+            "rank_math_focus_keyword": title,
+            "rank_math_title": title,
+            "rank_math_description": meta_desc
         }
     }
 
@@ -300,18 +415,40 @@ def post_to_wordpress(title, html, category_slug, image_url):
             )
             print("🔄 재저장 완료:", refresh_res.status_code)
 
+        trigger_seo_recalc(post_id)
+
     else:
         print("❌ 등록 실패:", r.text)
 
+def trigger_seo_recalc(post_id):
+    try:
+        refresh_res = requests.put(
+            f"{WP_URL}/{post_id}",
+            headers={"Content-Type": "application/json"},
+            data=json.dumps({"status": "publish"}),
+            auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD)
+        )
+        if refresh_res.status_code == 200:
+            print("✅ Rank Math SEO 점수 재계산 트리거 완료")
+        else:
+            print("⚠️ Rank Math 점수 트리거 실패:", refresh_res.status_code, refresh_res.text)
+    except Exception as e:
+        print("❌ Rank Math 트리거 중 오류:", e)
 
 if __name__ == "__main__":
-    items = get_trending_with_news(count=1)
+    print("\n🚀 [시작] 트렌드 키워드 기반 자동 포스팅 실행\n")
+    items = get_trending_with_news(count=1)  # 예: 키워드 5개 가져옴
+
     for idx, (keyword, news, category, image_url) in enumerate(items, 1):
-        print(f"\n🌀 [{idx}] {keyword} 처리 중...")
+        print(f"\n🌀 [{idx}] 키워드 처리 시작: {keyword}")
+
         if not news:
             print("⚠️ 뉴스 없음, 건너뜀")
             continue
+        print(f"📝 GPT 본문 생성 중... ({keyword})")
         html = generate_blog_content(keyword, news, CATEGORY_MAP[category])
+        print(f"📤 워드프레스 포스팅 시작... ({keyword})")
         post_to_wordpress(keyword, html, category, image_url)
-        time.sleep(2)
+        print(f"✅ [{idx}] 키워드 완료: {keyword} → 다음으로 이동\n")
+        time.sleep(2)  # ← 여기서 1개 발행 끝나고 다음 키워드 진행
     print("\n🎉 전체 포스팅 완료!")
