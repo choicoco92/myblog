@@ -437,7 +437,7 @@ def trigger_seo_recalc(post_id):
 
 if __name__ == "__main__":
     print("\n🚀 [시작] 트렌드 키워드 기반 자동 포스팅 실행\n")
-    items = get_trending_with_news(count=1)  # 예: 키워드 5개 가져옴
+    items = get_trending_with_news(count=5)  # 예: 키워드 5개 가져옴
 
     for idx, (keyword, news, category, image_url) in enumerate(items, 1):
         print(f"\n🌀 [{idx}] 키워드 처리 시작: {keyword}")
