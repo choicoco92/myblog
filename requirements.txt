@@ -3,3 +3,5 @@ beautifulsoup4
 python-wordpress-xmlrpc
 openai==0.28
 feedparser
+selenium
+webdriver-manager
