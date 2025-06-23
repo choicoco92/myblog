@@ -13,3 +13,4 @@ WP_PASSWORD = os.environ['WP_PASSWORD']
 # 쿠팡 세팅
 CP_ACCESS_KEY = os.environ['CP_ACCESS_KEY']
 CP_SECRET_KEY = os.environ['CP_SECRET_KEY']
+PEXELS_API_KEY = os.getenv('PEXELS_API_KEY')
