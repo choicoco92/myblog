@@ -17,9 +17,9 @@ load_dotenv()
 
 # Load API keys from environment variables
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-WP_URL = os.getenv('WP_URL2')
-WP_USERNAME = os.getenv('WP_USERNAME2')
-WP_PASSWORD = os.getenv('WP_PASSWORD2')
+WP_URL = os.getenv('WP_URL')
+WP_USERNAME = os.getenv('WP_USERNAME')
+WP_PASSWORD = os.getenv('WP_PASSWORD')
 PEXELS_API_KEY = os.getenv('PEXELS_API_KEY')
 
 print("🔑 OPENAI_API_KEY:", OPENAI_API_KEY[:10] + "...")
@@ -194,7 +194,10 @@ used_keywords = set()
 
 def generate_meta_description(title):
     current_year = datetime.now().year
-    return f"Get the latest {current_year} information and expert analysis on {title}. Find detailed comparisons, buying guides, and top recommendations all in one place."
+    desc = f"Get the latest {current_year} information and expert analysis on {title}. Find detailed comparisons, buying guides, and top recommendations all in one place."
+    if len(desc) > 160:
+        desc = desc[:157] + '...'
+    return desc
 
 def generate_blog_content(keyword, category):
     current_year = datetime.now().year
@@ -379,6 +382,15 @@ def post_to_wordpress(title, html, category_slug, image_url):
         print("✅ Post published successfully:", r.json().get('link'))
     else:
         print("❌ Posting failed:", r.text)
+
+    # 하단 글로벌 정보 버튼 추가
+    html += """
+    <div style=\"text-align: center; margin: 20px 0;\">
+        <a href=\"https://godmazon.store/\" target=\"_blank\" rel=\"noopener\" style=\"display: inline-block; background-color: #222; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;\">
+            more info 
+        </a>
+    </div>
+    """
 
 def generate_high_cpc_keywords_ai(category=None, count=5):
     """Dynamically generates high-CPC keywords using OpenAI."""
