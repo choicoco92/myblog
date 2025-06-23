@@ -356,8 +356,12 @@ def generate_blog_content(keyword, news_titles, category):
 
 독자가 실제로 행동할 수 있는 구체적이고 상세한 정보를 제공해야 합니다.
 
+⚠️ **중요한 규칙**:
+- 글은 최소 800단어 이상으로 작성해주세요.
+- 글은 항상 최대한 최신정보 기준으로 해주세요 
+
 ⚠️ **중요한 키워드 사용 규칙**:
-- 핵심 키워드 "{keyword}"는 전체 글에서 정확히 2~3회만 사용하세요
+- 핵심 키워드 "{keyword}"는 전체 글에서 정확히 6회만 사용하세요
 - 키워드 밀도는 1~2% 이하로 유지하세요
 - 같은 문단이나 문장에 키워드가 반복되지 않도록 하세요
 - 키워드 대신 동의어나 유사어를 적극 활용하세요
@@ -587,6 +591,15 @@ def post_to_wordpress(title, html, category_slug, image_url):
         </div>
         """
         html += product_html
+
+    # "더 많은 정보 보기" 버튼 추가
+    html += """
+    <div style="text-align: center; margin: 40px 0;">
+        <a href="https://mgddang.com/" target="_blank" rel="noopener" style="display: inline-block; background-color: #1a73e8; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">
+            더 많은 정보 보기
+        </a>
+    </div>
+    """
 
     post = {
         "title": reword_title(title),
