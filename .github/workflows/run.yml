@@ -23,12 +23,17 @@ jobs:
       run: pip install -r requirements.txt
 
     - name: Run auto post script
-      run: python blog.py
+      run: |
+          python blog.py
+          python amz-blog.py
       env:
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        WP_URL: ${{ secrets.WP_URL }}
-        WP_USERNAME: ${{ secrets.WP_USERNAME }}
-        WP_PASSWORD: ${{ secrets.WP_PASSWORD }}
-        CP_ACCESS_KEY: ${{ secrets.CP_ACCESS_KEY }}
-        CP_SECRET_KEY: ${{ secrets.CP_SECRET_KEY }}
-        PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          WP_URL: ${{ secrets.WP_URL }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_PASSWORD: ${{ secrets.WP_PASSWORD }}
+          CP_ACCESS_KEY: ${{ secrets.CP_ACCESS_KEY }}
+          CP_SECRET_KEY: ${{ secrets.CP_SECRET_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          WP_URL2: ${{ secrets.WP_URL2 }}
+          WP_USERNAME2: ${{ secrets.WP_USERNAME2 }}
+          WP_PASSWORD2: ${{ secrets.WP_PASSWORD2 }}
