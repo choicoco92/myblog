@@ -24,7 +24,7 @@ jobs:
 
     - name: Run auto post script
       run: |
-          # python blog.py
+          python blog.py
           python amz-blog.py
       env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
