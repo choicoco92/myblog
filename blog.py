@@ -346,6 +346,14 @@ def generate_meta_description(title):
     current_year = datetime.now().year
     return f"{title}에 대한 {current_year}년 최신 정보와 전문가 분석을 확인하세요. 상세한 비교 분석, 구매 가이드, 추천 순위까지 한 번에 알아보세요."
 
+def add_heading_styles(html):
+    h2_style = 'background:#f5f7fa; color:#222; padding:12px 18px; border-radius:8px; font-size:1.5em; margin:32px 0 18px 0;'
+    h3_style = 'color:#1a73e8; font-size:1.15em; margin:24px 0 12px 0;'
+    import re
+    html = re.sub(r'<h2>(.*?)</h2>', rf'<h2 style="{h2_style}">\1</h2>', html)
+    html = re.sub(r'<h3>(.*?)</h3>', rf'<h3 style="{h3_style}">\1</h3>', html)
+    return html
+
 def generate_blog_content(keyword, news_titles, category):
     current_year = datetime.now().year
     
@@ -356,6 +364,7 @@ def generate_blog_content(keyword, news_titles, category):
 3. 마크다운 헤더(### 등)가 한 번이라도 나오면 전체 결과를 무효로 간주
 4. 표는 <table> 태그와 인라인 스타일로 예쁘게 출력
 5. 키워드는 정확히 7회만 사용(동의어 포함, 반복 금지)
+6. 모든 제목(h2, h3 등)에도 인라인 스타일(예: color, background, border, padding 등)을 반드시 적용하세요.\n   예시: <h2 style=\"background:#f5f7fa; color:#222; padding:12px 18px; border-radius:8px; font-size:1.5em; margin:32px 0 18px 0;\">섹션 제목</h2>
 
 **중요한 키워드 사용 규칙:**
 - 핵심 키워드 "{keyword}"는 전체 글에서 **정확히 7회만 사용하세요**
@@ -436,7 +445,9 @@ def generate_blog_content(keyword, news_titles, category):
         temperature=0.7,
         max_tokens=4000
     )
-    return res['choices'][0]['message']['content']
+    result = res['choices'][0]['message']['content']
+    result = add_heading_styles(result)
+    return result
 
 
 
