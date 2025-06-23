@@ -245,7 +245,9 @@ def generate_blog_content(keyword, news_titles, category):
                 "12. **주의사항**: 실제 이용 시 주의해야 할 점들을 구체적으로 명시합니다.\n"
                 "13. **FAQ 섹션**: 키워드와 관련된 자주 묻는 질문과 답변을 포함합니다.\n"
                 "14. **행동 유도**: 글 마지막에 명확하고 구체적인 행동 단계를 제시합니다.\n"
-                "15. **키워드 밀도**: 핵심 키워드를 자연스럽게 8-10회 사용하되, 과도한 반복을 피합니다.\n"
+                "15. **키워드 밀도**: 핵심 키워드를 자연스럽게 4-6회 사용하되, 과도한 반복을 피합니다. 키워드 밀도는 2-3% 이하로 유지하여 자연스러운 읽기 경험을 제공합니다.\n"
+                "15-1. **키워드 배치**: 키워드는 제목, 첫 문단, 중간 섹션 2-3곳, 마무리 부분에 자연스럽게 배치합니다. 연속된 문장에서 반복하지 않습니다.\n"
+                "15-2. **동의어 활용**: 키워드와 의미가 같은 다른 표현들을 적절히 사용하여 자연스러운 문장을 만듭니다.\n"
                 "16. **긴급성**: '지금', '바로', '서둘러' 등 긴급성을 강조하는 표현을 적절히 사용합니다.\n"
                 "17. **HTML 태그**: <h2>, <h3>, <h4>, <p>, <ul>, <li>, <strong>, <em> 태그를 적절히 사용하여 구조화합니다.\n"
                 "18. **이모지**: 각 섹션에 적절한 이모지를 사용하여 가독성을 높입니다.\n"
@@ -320,15 +322,19 @@ def reword_title(keyword):
     current_year = datetime.now().year
     patterns = [
         f"{current_year}년 {keyword} 완벽 가이드",
-        f"{keyword} 선택하는 방법 총정리",
-        f"{keyword} 비교 분석 및 추천",
-        f"{keyword} 알아보기 - 전문가 조언",
-        f"{keyword} 구매 전 필수 체크리스트",
-        f"{keyword} 최신 정보와 추천 순위",
-        f"{keyword} 완전 분석 - 이렇게 선택하세요",
-        f"{keyword} 가이드 - 실전 활용법",
-        f"{keyword} 비교 및 구매 가이드",
-        f"{keyword} 추천 - 전문가가 알려주는 선택법"
+        f"{current_year}년 {keyword} TOP 5 추천",
+        f"{keyword} {current_year}년 최신 정보",
+        f"{keyword} 선택하는 7가지 방법",
+        f"{keyword} 비교 분석 TOP 6",
+        f"{keyword} 알아보기 - {current_year}년 전문가 조언",
+        f"{keyword} 구매 전 10가지 체크리스트",
+        f"{keyword} {current_year}년 최신 추천 순위",
+        f"{keyword} 완전 분석 - 5가지 선택 기준",
+        f"{keyword} 가이드 - {current_year}년 실전 활용법",
+        f"{keyword} 비교 및 구매 가이드 TOP 8",
+        f"{keyword} 추천 - {current_year}년 전문가 선택법",
+        f"{current_year}년 {keyword} 완전 정복 가이드",
+        f"{keyword} {current_year}년 최고의 선택 TOP 7"
     ]
     return random.choice(patterns)
 
