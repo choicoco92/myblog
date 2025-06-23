@@ -408,7 +408,7 @@ def generate_blog_content(keyword, news_titles, category):
         model="gpt-4",
         messages=messages,
         temperature=0.7,
-        max_tokens=6000
+        max_tokens=4000
     )
     return res['choices'][0]['message']['content']
 
