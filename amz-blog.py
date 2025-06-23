@@ -17,9 +17,9 @@ load_dotenv()
 
 # Load API keys from environment variables
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-WP_URL = os.getenv('WP_URL2')
-WP_USERNAME = os.getenv('WP_USERNAME2')
-WP_PASSWORD = os.getenv('WP_PASSWORD2')
+WP_URL = os.getenv('WP_URL')
+WP_USERNAME = os.getenv('WP_USERNAME')
+WP_PASSWORD = os.getenv('WP_PASSWORD')
 PEXELS_API_KEY = os.getenv('PEXELS_API_KEY')
 
 print("🔑 OPENAI_API_KEY:", OPENAI_API_KEY[:10] + "...")
@@ -28,9 +28,9 @@ print("🌐 WP_URL:", WP_URL)
 openai.api_key = OPENAI_API_KEY
 
 CATEGORY_MAP = {
-    "finance": "💰 Finance & Investing",
+    "finance": "💰 Finance & Investing",           
     "health": "💪 Health & Wellness",
-    "tech": "🔌 Tech & Gadgets",
+    "tech": "🔌 Tech & Gadgets",  
     "legal": "⚖️ Legal",
     "marketing": "📈 Marketing & Business",
     "lifestyle": "🏠 Lifestyle & Home",
@@ -257,11 +257,11 @@ The article must provide specific, actionable information for the reader.
 
 def get_or_create_category(slug):
     name = CATEGORY_MAP.get(slug, slug.replace('-', ' ').title())
-    url = f"{WP_URL}/categories"
+    url = f"{WP_URL.replace('/posts', '/categories')}"
     r = requests.get(f"{url}?slug={slug}", auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
     if r.status_code == 200 and r.json():
         return r.json()[0]['id']
-
+    
     res = requests.post(url, json={"name": name, "slug": slug}, auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
     if res.status_code == 201:
         return res.json().get('id')
@@ -270,7 +270,7 @@ def get_or_create_category(slug):
 
 def get_or_create_tags(tag_names):
     tag_ids = []
-    url = f"{WP_URL}/tags"
+    url = f"{WP_URL.replace('/posts', '/tags')}"
     for tag in tag_names:
         r = requests.get(f"{url}?search={tag}", auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
         if r.status_code == 200 and r.json():
@@ -315,14 +315,14 @@ def upload_image_to_wp(image_url, keyword=None):
     }
 
     try:
-        media_response = requests.post(f"{WP_URL}/media", headers=media_headers, data=img_data, auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
+        media_response = requests.post(f"{WP_URL.replace('/posts', '/media')}", headers=media_headers, data=img_data, auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
         media_response.raise_for_status()
         media_json = media_response.json()
-
+        
         # Add alt text to the image
         if keyword:
-            requests.put(f"{WP_URL}/media/{media_json['id']}", json={"alt_text": alt_text}, auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
-
+            requests.put(f"{WP_URL.replace('/posts', '/media')}/{media_json['id']}", json={"alt_text": alt_text}, auth=HTTPBasicAuth(WP_USERNAME, WP_PASSWORD))
+        
         print("✅ Image uploaded successfully:", media_json.get("source_url"))
         return media_json["id"]
     except Exception as e:
@@ -346,7 +346,7 @@ def post_to_wordpress(title, html, category_slug, image_url):
         return
 
     meta_desc = generate_meta_description(title)
-
+    
     try:
         tag_names = generate_tags_with_gpt(title)
     except Exception as e:
@@ -366,8 +366,8 @@ def post_to_wordpress(title, html, category_slug, image_url):
         "status": "publish",
         "categories": [cat_id],
         "tags": tag_ids,
-        "meta": {
-            "rank_math_focus_keyword": title,
+        "meta": { 
+            "rank_math_focus_keyword": title, 
             "rank_math_description": meta_desc,
         },
         **({"featured_media": media_id} if media_id else {})
@@ -423,10 +423,10 @@ Example: best business loans, cheap car insurance, online therapy sessions, data
 def get_dynamic_high_cpc_keyword():
     """Dynamically generates and selects a high-CPC keyword."""
     global used_keywords
-
+    
     categories = list(HIGH_CPC_KEYWORDS.keys()) + ["ai_generated"]
     category = random.choice(categories)
-
+    
     if category == "ai_generated":
         keywords = generate_high_cpc_keywords_ai(count=5)
         if keywords:
@@ -444,12 +444,12 @@ def get_dynamic_high_cpc_keyword():
 
     other_category = random.choice([c for c in HIGH_CPC_KEYWORDS.keys() if c != category] or [category])
     ai_keywords = generate_high_cpc_keywords_ai(other_category, count=3)
-
+    
     all_keywords = list(dict.fromkeys(base_keywords + ai_keywords))
     unused = [kw for kw in all_keywords if kw not in used_keywords]
-
+    
     selected_keyword = random.choice(unused) if unused else random.choice(all_keywords)
-
+    
     used_keywords.add(selected_keyword)
     print(f"🎯 Available keywords: {all_keywords}")
     print(f"✅ Final choice: {selected_keyword}")
@@ -459,7 +459,7 @@ def get_pexels_image_url(keyword):
     """Gets an image URL from Pexels for a given keyword."""
     url = f'https://api.pexels.com/v1/search?query={quote(keyword)}&per_page=10&page=1&orientation=landscape'
     headers = {"Authorization": PEXELS_API_KEY}
-
+    
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
@@ -476,14 +476,14 @@ def get_pexels_image_url(keyword):
 
 def run_high_cpc_strategy():
     print("\n🚀 [START] High-CPC Keyword Auto-Posting for Global Audience\n")
-
+    
     keyword, category_key = get_dynamic_high_cpc_keyword()
     print(f"🎯 Selected Keyword: {keyword} (Category: {category_key})")
 
     image_url = get_pexels_image_url(keyword)
     if not image_url:
         print("⚠️ Could not find an image on Pexels. Proceeding without a featured image.")
-
+    
     category_name = CATEGORY_MAP.get(category_key, "General Info")
     html = generate_blog_content(keyword, category_name)
     post_to_wordpress(keyword, html, category_key, image_url)
