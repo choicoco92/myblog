@@ -17,9 +17,9 @@ load_dotenv()
 
 # Load API keys from environment variables
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-WP_URL = os.getenv('WP_URL')
-WP_USERNAME = os.getenv('WP_USERNAME')
-WP_PASSWORD = os.getenv('WP_PASSWORD')
+WP_URL = os.getenv('WP_URL2')
+WP_USERNAME = os.getenv('WP_USERNAME2')
+WP_PASSWORD = os.getenv('WP_PASSWORD2')
 PEXELS_API_KEY = os.getenv('PEXELS_API_KEY')
 
 print("🔑 OPENAI_API_KEY:", OPENAI_API_KEY[:10] + "...")
