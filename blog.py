@@ -398,7 +398,8 @@ def generate_blog_content(keyword, news_titles, category):
                 "23. **내부 링크**: 관련 키워드나 개념에 대한 내부 링크를 반드시 포함합니다. 예시: <a href='/finance/신용카드-추천' target='_blank'>신용카드 추천</a>, <a href='/finance/보험-추천' target='_blank'>보험 추천</a> 등\n"
                 "24. **외부 링크**: 신뢰할 수 있는 외부 소스에 대한 링크를 포함합니다.\n"
                 "25. **이미지 최적화**: 이미지에 적절한 alt 태그를 포함합니다.\n"
-                "26. **마무리 링크**: 글 마지막에 언급된 제품이나 서비스의 실제 링크를 HTML <a> 태그로 포함합니다. 예시: <a href='https://www.apple.com/kr/' target='_blank'>아이폰 16 Pro Max</a>"
+                "26. **마무리 링크**: 글 마지막에 언급된 제품이나 서비스의 실제 링크를 HTML <a> 태그로 포함합니다. 예시: <a href='https://www.apple.com/kr/' target='_blank'>아이폰 16 Pro Max</a>\n"
+                "27. **국내 데이터 우선**: 반드시 한국에서 실제로 이용 가능한 서비스, 강의, 브랜드, 상품만 소개합니다. 해외 서비스, 해외 브랜드, 해외 강의는 절대 포함하지 않습니다. 국내 플랫폼(예: 클래스101, 만개의레시피, 에피큐리언, 쿠킹박스, 해먹남녀, 백종원의 요리비책 등) 위주로 추천하세요.\n"
             )
         },
         {"role": "user", "content": prompt}
